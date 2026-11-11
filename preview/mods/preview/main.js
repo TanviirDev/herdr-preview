@@ -86,7 +86,23 @@ export default class Preview extends View {
       cx.notify();
       if (this.panel && this.home) this.follow(cx);
     });
-    if (this.panel) cx.timer.every(200, () => this.sync());
+    if (this.panel) cx.timer.every(200, (cx) => { this.sync(); this.retryWeb(cx); });
+  }
+
+  // A missing web view app isn't final: it may have been mid-install. Retry every 5 s while
+  // a page or .html file that wants it is showing.
+  retryWeb(cx) {
+    const wants = this.file && (isUrl(this.file) || HTML.has(extOf(this.file))) && !this.textMode;
+    if (!this.webMissing || !wants || Date.now() - (this.lastRetry ?? 0) < 5000) return;
+    this.lastRetry = Date.now();
+    const file = this.file;
+    cx.spawn(async (cx) => {
+      const r = await exec("open", ["-g", "-b", WEB_APP]).catch(() => ({ code: 1 }));
+      if (r.code !== 0 || this.file !== file) return;
+      this.webMissing = false;
+      this.open(file, cx);
+      cx.notify();
+    });
   }
 
   // The app .md files opened in before install.sh took them over (recorded by the
@@ -141,6 +157,11 @@ export default class Preview extends View {
     };
     const text = JSON.stringify(geometry);
     const now = Date.now();
+    // Keep the web view app running while it should show (it may have been updated or quit).
+    if (geometry.visible && now - (this.lastStart ?? 0) > 5000) {
+      this.lastStart = now;
+      exec("open", ["-g", "-b", WEB_APP]).catch(() => {});
+    }
     if (text === this.lastGeometry && now - (this.lastWrite ?? 0) < 1000) return;
     this.lastGeometry = text;
     this.lastWrite = now;

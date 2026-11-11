@@ -58,12 +58,19 @@ place() {
   say "installed: $dst"
 }
 
-# 1. The Herdr layout and its two mods.
+# 1. The two helper apps, built on this Mac, before the mods: Herdr reloads a mod the moment
+#    its files land, and a reloaded panel starts the web view app straight away. Quit a running
+#    web view so the new build starts.
+pkill -f "Herdr Preview Web.app/Contents/MacOS/HerdrPreviewWeb" 2>/dev/null || true
+"$here/native/build.sh" "$apps_dir"
+"$lsregister" -f "$apps_dir/Herdr Preview Web.app" "$apps_dir/Herdr Preview Links.app"
+
+# 2. The Herdr layout and its two mods.
 place "$here/preview/layouts/preview.json" "$app_home/layouts/preview.json"
 place "$here/preview/mods/preview" "$app_home/mods/preview"
 place "$here/preview/mods/preview-tabs" "$app_home/mods/preview-tabs"
 
-# 2. The command, and a short mdp alias only when nothing else has that name.
+# 3. The command, and a short mdp alias only when nothing else has that name.
 place "$here/bin/herdr-preview" "$bin_dir/herdr-preview"
 chmod +x "$bin_dir/herdr-preview"
 if [ ! -e "$bin_dir/mdp" ] && ! command -v mdp >/dev/null 2>&1; then
@@ -77,10 +84,6 @@ case ":$PATH:" in
   *) say "note: $bin_dir isn't on your PATH; add it to use herdr-preview from a terminal" ;;
 esac
 
-# 3. The two helper apps, built on this Mac. Quit a running web view so the new one starts.
-pkill -f "Herdr Preview Web.app/Contents/MacOS/HerdrPreviewWeb" 2>/dev/null || true
-"$here/native/build.sh" "$apps_dir"
-"$lsregister" -f "$apps_dir/Herdr Preview Web.app" "$apps_dir/Herdr Preview Links.app"
 
 # 4. Cmd-clicked .md links: make Herdr Preview Links the .md default, recording the old one.
 if [ "$md_clicks" = 1 ]; then

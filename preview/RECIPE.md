@@ -72,6 +72,9 @@ and web pages in a real WebKit view.
   copy's `render` doesn't run. The helper hides the view when the file is over 3 s old, so a
   layout switch or crash never leaves a stray window.
 - **`exec` doesn't expand `~`:** the mod works out the home folder from `appHome()`.
+- **Herdr reloads a mod the moment its files land,** and a reloaded panel starts the web view
+  app at once. Install or rebuild the app before copying the mod. The mod also retries a missing
+  app every 5 s, and re-launches a quit one every 5 s while a page is showing.
 - **A plain `open` on a `.md` file loops** once the Links app is the `.md` default; the Open
   button uses the recorded fallback app.
 - **Herdr's own menus and dialogs open under the web view.** It's another app's window.
