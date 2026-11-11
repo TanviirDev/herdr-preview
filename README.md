@@ -10,7 +10,16 @@ and shows Markdown, HTML files and web pages:
 - **Cmd-clicking a `.md` link** in a Herdr terminal (for example one a coding agent printed)
   opens it in the panel. Optional, on by default.
 
-![Preview panel](preview/preview.png)
+<table>
+  <tr>
+    <td valign="top"><img src="preview/preview.png" alt="A Markdown file in the Preview panel" width="400"></td>
+    <td valign="top"><img src="preview/preview-html.png" alt="A styled Lavish review doc in the Preview panel's WebKit view" width="400"></td>
+  </tr>
+  <tr>
+    <td>Markdown, rendered natively</td>
+    <td>HTML in the WebKit view: a <a href="examples/rollout-plan.html">Lavish review doc</a>, with Lavish's annotation working</td>
+  </tr>
+</table>
 
 ## Install
 
@@ -46,7 +55,10 @@ herdr-preview notes.md                 # show it in the Preview panel
 herdr-preview report.html              # HTML: shown in the WebKit view
 herdr-preview http://localhost:5173    # a web page or dev server
 herdr-preview notes.md right           # a split pane beside the focused pane instead (or: down)
+herdr-preview --snapshot page.png      # save what the web view shows now, e.g. for an agent to check
 ```
+
+To try the web view, open the example: `herdr-preview examples/rollout-plan.html`.
 
 `install.sh` also adds `mdp` as a short alias when nothing else on your Mac has that name.
 
@@ -56,7 +68,8 @@ Clicking a link to another `.md` or `.html` file opens it in the panel, with **â
 
 [Lavish](https://www.npmjs.com/package/lavish-axi) review docs: `herdr-preview doc.html` shows
 the doc's open Lavish session when the Lavish server is running, so annotation and feedback work
-in the panel.
+in the panel. Start the session without a browser (`LAVISH_AXI_NO_OPEN=1 lavish-axi doc.html`),
+then run `herdr-preview doc.html`.
 
 ## How it works
 
