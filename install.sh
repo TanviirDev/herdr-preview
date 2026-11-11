@@ -1,8 +1,10 @@
 #!/bin/sh
-# Installs herdr-preview: a Preview panel for the Herdr app on macOS.
+# Installs herdr-preview: a Preview panel for the Herdr app, on macOS or Linux.
+# (Windows: install.ps1.) On Linux it installs the panel, the layout and the command; the web
+# view and .md click routing are macOS-only, so HTML shows as plain text there.
 #
 # Usage: ./install.sh [--no-md-clicks] [--no-switch] [--update]
-#   --no-md-clicks  leave .md files alone: Cmd-clicked .md links won't open in the panel
+#   --no-md-clicks  leave .md files alone: Cmd-clicked .md links won't open in the panel (macOS)
 #   --no-switch     don't switch the Herdr window to the "preview" layout afterwards
 #   --update        replace an earlier herdr-preview install's files (never anyone else's)
 #
@@ -33,8 +35,13 @@ lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 say() { printf '%s\n' "$*"; }
 die() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 
-[ "$(uname -s)" = Darwin ] || die "herdr-preview is macOS only"
-command -v swiftc >/dev/null 2>&1 || die "swiftc not found. Install the Xcode Command Line Tools first: xcode-select --install"
+mac=0
+case "$(uname -s)" in
+  Darwin) mac=1 ;;
+  Linux) say "Linux: installing the panel, layout and command; the web view and .md click routing are macOS-only" ;;
+  *) die "unsupported system $(uname -s); on Windows run install.ps1" ;;
+esac
+[ "$mac" = 0 ] || command -v swiftc >/dev/null 2>&1 || die "swiftc not found. Install the Xcode Command Line Tools first: xcode-select --install"
 have_herdr=1
 command -v herdr-app >/dev/null 2>&1 || { have_herdr=0; say "note: herdr-app isn't on PATH, so nothing will be checked or switched in the Herdr app"; }
 
@@ -58,12 +65,14 @@ place() {
   say "installed: $dst"
 }
 
-# 1. The two helper apps, built on this Mac, before the mods: Herdr reloads a mod the moment
+# 1. macOS: the two helper apps, built on this Mac, before the mods: Herdr reloads a mod the moment
 #    its files land, and a reloaded panel starts the web view app straight away. Quit a running
 #    web view so the new build starts.
-pkill -f "Herdr Preview Web.app/Contents/MacOS/HerdrPreviewWeb" 2>/dev/null || true
-"$here/native/build.sh" "$apps_dir"
-"$lsregister" -f "$apps_dir/Herdr Preview Web.app" "$apps_dir/Herdr Preview Links.app"
+if [ "$mac" = 1 ]; then
+  pkill -x HerdrPreviewWeb 2>/dev/null || true
+  "$here/native/build.sh" "$apps_dir"
+  "$lsregister" -f "$apps_dir/Herdr Preview Web.app" "$apps_dir/Herdr Preview Links.app"
+fi
 
 # 2. The Herdr layout and its two mods.
 place "$here/preview/layouts/preview.json" "$app_home/layouts/preview.json"
@@ -77,7 +86,7 @@ if [ ! -e "$bin_dir/mdp" ] && ! command -v mdp >/dev/null 2>&1; then
   ln -s herdr-preview "$bin_dir/mdp"
   say "installed: $bin_dir/mdp (alias for herdr-preview)"
 else
-  say "note: mdp is taken on this Mac, so no alias; use herdr-preview"
+  say "note: mdp is already taken here, so no alias; use herdr-preview"
 fi
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
@@ -86,7 +95,9 @@ esac
 
 
 # 4. Cmd-clicked .md links: make Herdr Preview Links the .md default, recording the old one.
-if [ "$md_clicks" = 1 ]; then
+if [ "$mac" = 0 ]; then
+  : # .md click routing is macOS-only
+elif [ "$md_clicks" = 1 ]; then
   if "$apps_dir/Herdr Preview Links.app/Contents/MacOS/HerdrPreviewLinks" --install --cli "$bin_dir/herdr-preview"; then
     say "Cmd-clicked .md links in Herdr now open in the Preview panel"
   else

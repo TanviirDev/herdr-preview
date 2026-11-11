@@ -15,12 +15,16 @@
 // second; the app hides the view when the file goes stale. Without that app, or outside this
 // layout, HTML falls back to the native renderer, which has no CSS and runs no scripts.
 //
-// This mod runs programs (open, sh, mkdir) and writes outside its folder:
-// ~/.config/herdr-app/herdr-preview/ and ~/.local/state/herdr-preview/.
+// Platforms: the panel (Markdown, plain HTML, the Preview button) works wherever the Herdr app
+// runs. The WebKit view and .md click routing are macOS-only; elsewhere HTML shows as plain text.
+//
+// This mod runs programs (on macOS: open, pgrep, mkdir; on Linux: xdg-open, mkdir; on Windows:
+// cmd /c start) and writes outside its folder: ~/.config/herdr-app/herdr-preview/ and
+// ~/.local/state/herdr-preview/.
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, TextView } from "gpui-base";
-import { exec, readTextFile, watchFolder, theme, props, layout, settings, appHome } from "herdr";
+import { exec, readTextFile, watchFolder, theme, props, layout, settings, appHome, home, window } from "herdr";
 import * as fs from "fs/promises";
 
 const WEB_APP = "io.github.tanviirdev.herdr-preview.web";
@@ -32,10 +36,21 @@ const HEADER = 30; // the header bar's height; the web view covers what's below 
 const NODES = ["preview-panel", "panel", "work-body", "tabs"]; // what the geometry needs
 
 const isUrl = (s) => /^(https?|file):\/\//i.test(s ?? "");
-const extOf = (p) => (p.match(/\.([^./?#]+)(?:[?#].*)?$/)?.[1] ?? "").toLowerCase();
-const dirOf = (p) => p.slice(0, p.lastIndexOf("/")) || "/";
-const baseOf = (p) => (isUrl(p) ? p.replace(/^[a-z]+:\/\//i, "") : p.slice(p.lastIndexOf("/") + 1));
-const tilde = (p, home) => (home && p.startsWith(home + "/") ? "~" + p.slice(home.length) : p);
+const extOf = (p) => (p.match(/\.([^./\\?#]+)(?:[?#].*)?$/)?.[1] ?? "").toLowerCase();
+// Paths may use / or, on Windows, \ (and start with a drive, C:\).
+const lastSep = (p) => Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+const dirOf = (p) => p.slice(0, lastSep(p)) || "/";
+const baseOf = (p) => (isUrl(p) ? p.replace(/^[a-z]+:\/\//i, "") : p.slice(lastSep(p) + 1));
+const tilde = (p, home) => (home && (p.startsWith(home + "/") || p.startsWith(home + "\\")) ? "~" + p.slice(home.length) : p);
+const platform = () => window()?.platform ?? "macos";
+
+// Opens a file or URL in another app: the given macOS app (by bundle ID) or the default one.
+function openExternally(target, macApp) {
+  const os = platform();
+  if (os === "windows") return exec("cmd", ["/c", "start", "", target]).catch(() => {});
+  if (os === "linux") return exec("xdg-open", [target]).catch(() => {});
+  return exec("open", macApp ? ["-b", macApp, target] : [target]).catch(() => {});
+}
 const findNode = (node, id) => {
   if (!node) return null;
   if (node.id === id) return node;
@@ -53,6 +68,7 @@ const webLayout = () => { const root = layout(); return NODES.every((id) => find
 // the Herdr app isn't frontmost. -x matches the process name only; -f would also match any
 // command line that mentions it.
 async function ensureWeb() {
+  if (platform() !== "macos") return false; // the web view app exists for macOS only
   const running = await exec("pgrep", ["-x", WEB_PROCESS]).catch(() => ({ code: 1 }));
   if (running.code === 0) return true;
   const r = await exec("open", ["-g", "-b", WEB_APP]).catch(() => ({ code: 1 }));
@@ -61,12 +77,14 @@ async function ensureWeb() {
 
 // Resolves a relative link against the previewed file's folder.
 function resolve(from, rel) {
-  const parts = (rel.startsWith("/") ? "" : dirOf(from)).split("/");
-  for (const seg of rel.split("/")) {
+  const windows = /^[A-Za-z]:[\\/]/.test(from);
+  const absolute = /^([A-Za-z]:)?[\\/]/.test(rel);
+  const parts = (absolute ? "" : dirOf(from)).split(/[\\/]/).filter(Boolean);
+  for (const seg of rel.split(/[\\/]/)) {
     if (seg === "..") parts.pop();
     else if (seg && seg !== ".") parts.push(seg);
   }
-  return "/" + parts.filter(Boolean).join("/");
+  return windows ? parts.join("\\") : "/" + parts.join("/");
 }
 
 // The native renderer has no CSS or scripting, so their source would only show up as noise.
@@ -81,8 +99,7 @@ function htmlBody(html) {
 
 export default class Preview extends View {
   init(initial, cx) {
-    // Known at once from Herdr's home (~/.config/herdr-app); confirmed from $HOME below.
-    this.home = appHome().replace(/\/\.config\/herdr-app\/?$/, "");
+    this.home = home();
     this.history = [];
     this.label = null;
     this.textMode = false;
@@ -92,8 +109,6 @@ export default class Preview extends View {
     this.panel = !this.given;
     this.open(this.given, cx);
     cx.spawn(async (cx) => {
-      const r = await exec("sh", ["-c", 'printf %s "$HOME"']).catch(() => null);
-      if (r?.stdout) this.home = r.stdout;
       this.mdFallback = await this.readMdFallback();
       cx.notify();
       if (this.panel && this.home) this.follow(cx);
@@ -138,7 +153,7 @@ export default class Preview extends View {
       }
     };
     cx.spawn(async (cx) => {
-      await exec("mkdir", ["-p", dir]).catch(() => null);
+      if (platform() !== "windows") await exec("mkdir", ["-p", dir]).catch(() => null);
       await check(cx);
       try {
         for (;;) { await watchFolder(dir); await check(cx); }
@@ -209,9 +224,11 @@ export default class Preview extends View {
       this.sync();
       if (isUrl(file)) return;
     } else if (isUrl(file)) {
-      this.error = this.webMissing
-        ? "Web pages need the Herdr Preview Web app. Run install.sh from the herdr-preview repository."
-        : "Web pages show in the Preview panel only.";
+      this.error = platform() !== "macos"
+        ? "Web pages need the web view, which is macOS-only for now. Use Open to see this in your browser."
+        : this.webMissing
+          ? "Web pages need the Herdr Preview Web app. Run install.sh from the herdr-preview repository."
+          : "Web pages show in the Preview panel only.";
       return;
     }
     this.load(cx);
@@ -273,8 +290,9 @@ export default class Preview extends View {
   }
 
   link(url, cx) {
-    if (/^(https?|mailto):/i.test(url)) { exec("open", [url]); return; }
-    let path = url.replace(/^file:\/\//i, "").split("#")[0].split("?")[0];
+    if (/^(https?|mailto):/i.test(url)) { openExternally(url); return; }
+    // file:///C:/x on Windows: drop the slash before the drive.
+    let path = url.replace(/^file:\/\//i, "").replace(/^\/([A-Za-z]:)/, "$1").split("#")[0].split("?")[0];
     if (!path) return; // an in-page anchor
     try { path = decodeURIComponent(path); } catch {}
     const target = path.startsWith("/") && !path.startsWith(dirOf(this.file)) && !url.startsWith("file:")
@@ -286,15 +304,14 @@ export default class Preview extends View {
       this.open(target, cx);
       cx.notify();
     } else {
-      exec("open", [target]);
+      openExternally(target);
     }
   }
 
   // "Open" hands the file to another app: Markdown to the app it opened in before the
   // takeover (if install.sh took .md files over), everything else to its default app.
   openElsewhere() {
-    if (this.kind === "markdown" && this.mdFallback) exec("open", ["-b", this.mdFallback, this.file]);
-    else exec("open", [this.file]);
+    openExternally(this.file, this.kind === "markdown" ? this.mdFallback : null);
   }
 
   button(t, id, label, onClick) {
@@ -328,7 +345,7 @@ export default class Preview extends View {
       .when(Boolean(this.label && isUrl(this.file)), (el) => el.child(div().flex_none().text_color(t.accent).child("Lavish session")))
       .child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(where))
       .when(this.kind === "html", (el) => el.child(div().flex_none().text_color(t.dim)
-        .child(this.webMissing ? "no CSS (web view not installed)" : "no CSS")))
+        .child(this.webMissing && platform() === "macos" ? "no CSS (web view not installed)" : "no CSS")))
       // An .html file in the panel can switch between the web view and the native renderer.
       .when(this.panel && htmlFile && !this.webMissing && webLayout(), (el) => el
         .child(this.button(t, "mode", this.kind === "web" ? "Text" : "Web", (_e, cx) => {
