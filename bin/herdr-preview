@@ -1,0 +1,91 @@
+#!/bin/sh
+# herdr-preview: show a Markdown or HTML file, or a web page, in the Herdr app.
+#   herdr-preview <file>              show it in the Preview panel (layout "preview")
+#   herdr-preview <file> right|down   open it as a split pane beside the focused pane instead
+#   herdr-preview <url>               show a web page (http, https, file) in the Preview panel
+# In the panel, Markdown uses Herdr's native renderer; .html files and URLs use a real WebKit
+# view (the Herdr Preview Web app). Without a Preview panel in the shown layout, it falls back
+# to a split pane on the right.
+# An .html file with an open Lavish (lavish-axi) session shows that live session, so its
+# annotation and feedback work, when the Lavish server answers.
+set -eu
+
+if [ $# -lt 1 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "usage: herdr-preview <file.md|file.html|url> [right|down]" >&2
+  exit 2
+fi
+
+case "${2:-panel}" in
+  panel|right|down) where=${2:-panel} ;;
+  *) echo "herdr-preview: second argument must be right or down, not '$2'" >&2; exit 2 ;;
+esac
+
+case "$1" in
+  http://*|https://*|file://*)
+    # A URL shows in the Preview panel's web view; there is no split form.
+    file=$1
+    where=panel
+    ;;
+  *)
+    if [ ! -f "$1" ]; then
+      echo "herdr-preview: no such file: $1" >&2
+      exit 1
+    fi
+    dir=$(cd "$(dirname -- "$1")" && pwd -P)
+    file="$dir/$(basename -- "$1")"
+    ;;
+esac
+
+split() {
+  # JSON-escape the path: backslashes, then double quotes.
+  escaped=$(printf '%s' "$file" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+  herdr-app do pane.split \
+    "{\"direction\":\"$1\",\"mod\":\"preview\",\"props\":{\"file\":\"$escaped\"}}" >/dev/null
+}
+
+if [ "$where" != panel ]; then
+  split "$where"
+  exit
+fi
+
+# Prints the URL of the file's open Lavish session, if the Lavish server is answering.
+lavish_session() {
+  [ -f "$HOME/.lavish-axi/state.json" ] || return 1
+  url=$(/usr/bin/python3 - "$1" 2>/dev/null <<'PY'
+import json, os, sys
+want = os.path.realpath(sys.argv[1])
+try:
+    sessions = json.load(open(os.path.expanduser("~/.lavish-axi/state.json"))).get("sessions", {})
+except Exception:
+    sys.exit(1)
+for s in (sessions.values() if isinstance(sessions, dict) else sessions):
+    f = s.get("file")
+    if f and s.get("url") and s.get("status") == "open" and os.path.realpath(f) == want:
+        print(s["url"])
+        break
+PY
+  ) || return 1
+  [ -n "$url" ] && curl -fsS -m 2 -o /dev/null "$url" 2>/dev/null && printf '%s' "$url"
+}
+
+# Line 1: what to show. Line 2 (optional): the file it stands for, for the panel's header.
+target=$file
+label=
+case "$file" in
+  *.html|*.htm)
+    if session=$(lavish_session "$file"); then
+      target=$session
+      label=$file
+    fi
+    ;;
+esac
+
+# The panel follows this file; write it whole so the panel never reads half a path.
+state="$HOME/.local/state/herdr-preview"
+mkdir -p "$state"
+printf '%s\n%s\n' "$target" "$label" > "$state/target.tmp"
+mv -f "$state/target.tmp" "$state/target"
+
+if ! herdr-app do layout.show '{"id":"preview-panel"}' >/dev/null 2>&1; then
+  split right
+fi

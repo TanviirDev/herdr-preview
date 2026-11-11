@@ -1,0 +1,14 @@
+herdr-preview
+Copyright (c) 2026 TanviirDev
+
+This repository includes modified copies of two files from the Herdr app (https://herdr.dev),
+version 0.1.15, licensed under the Apache License, Version 2.0 (see LICENSE-APACHE):
+
+- preview/layouts/preview.json is modified from Herdr's layouts/main.json. The changes: the tab
+  bar block uses the preview-tabs mod, and a "preview-panel" column holding the preview mod is
+  added beside the Files/Changes panel.
+- preview/mods/preview-tabs/ is modified from Herdr's mods/tabs/ (main.js and its window-button
+  icons). The change: a Preview button beside Files and Changes that toggles the
+  "preview-panel" column. preview-tabs/preview.svg is new.
+
+Everything else in this repository is original and licensed under the MIT License (see LICENSE).

@@ -1,0 +1,4 @@
+# Written by `herdr-app check` and the Herdr app; not part of the kit.
+gpui-kit.d.ts
+jsconfig.json
+.DS_Store
