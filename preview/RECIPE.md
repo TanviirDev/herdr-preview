@@ -23,6 +23,13 @@ and web pages in a real WebKit view.
     20 px side padding, selectable and scrollable. In web mode the body shows "Opening the web
     view…" until the helper's window covers it.
 
+## Platforms
+
+The layout, both mods and Markdown work wherever the Herdr app runs. The web view and `.md`
+click routing are macOS-only: on Linux and Windows, HTML falls back to `TextView.html` and URLs
+show a note (Open sends them to the browser). The mod opens files with `open` on macOS,
+`xdg-open` on Linux and `cmd /c start` on Windows, and accepts `\` paths and drive letters.
+
 ## How it behaves
 
 - **Preview button:** toggles the `preview-panel` column (`layout.toggle`). Independent of

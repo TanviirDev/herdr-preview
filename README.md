@@ -1,7 +1,7 @@
 # herdr-preview
 
-A Preview panel for the [Herdr](https://herdr.dev) app on macOS. It sits beside your terminals
-and shows Markdown, HTML files and web pages:
+A Preview panel for the [Herdr](https://herdr.dev) app. It sits beside your terminals and shows
+Markdown, HTML files and web pages:
 
 - **Markdown** renders with Herdr's own renderer and updates every time the file is saved.
 - **HTML files and web pages** (including `localhost` dev servers) show in a real WebKit view,
@@ -21,10 +21,25 @@ and shows Markdown, HTML files and web pages:
   </tr>
 </table>
 
+## Platforms
+
+| | macOS | Linux | Windows |
+| --- | --- | --- | --- |
+| Preview panel, Preview button, Markdown | Yes | Yes | Yes |
+| HTML files | Real web view | Plain text (no CSS) | Plain text (no CSS) |
+| Web pages and `localhost` | Yes | No (Open sends them to your browser) | No (Open sends them to your browser) |
+| Cmd-click `.md` links into the panel | Yes | No | No |
+| Installer | `install.sh` | `install.sh` | `install.ps1` |
+
+The web view is a native macOS app that places its own window over the panel. Windows could get
+one (WebView2); on Linux it could work on X11, but not on Wayland, where apps can't place windows
+against another app's. **Linux and Windows are untested so far.** Reports welcome.
+
 ## Install
 
-You need macOS 14 or later, the Herdr app, and the Xcode Command Line Tools
-(`xcode-select --install`), which build two small helper apps on your Mac.
+On macOS you need macOS 14 or later, the Herdr app, and the Xcode Command Line Tools
+(`xcode-select --install`), which build two small helper apps on your Mac. On Linux you need the
+Herdr app; the same script installs the panel, the layout and the command.
 
 ```sh
 git clone https://github.com/TanviirDev/herdr-preview.git
@@ -43,6 +58,16 @@ Options:
 | `--update` | Replace the files from an earlier herdr-preview install |
 
 To remove everything, run `./uninstall.sh`. It hands `.md` files back to their previous app.
+
+On Windows, from the cloned folder in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1      # -Update, -NoSwitch as above
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+```
+
+It installs the layout and mods into `~\.config\herdr-app` and `herdr-preview` (a `.cmd` with
+its PowerShell script) into `~\.local\bin`; add that folder to your PATH.
 
 Installing from [herdr.dev/layouts](https://herdr.dev/layouts) instead (asking your agent to
 add it) copies only the layout and its two mods: Markdown works, but HTML falls back to plain
