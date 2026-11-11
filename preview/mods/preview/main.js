@@ -24,6 +24,7 @@ import { exec, readTextFile, watchFolder, theme, props, layout, settings, appHom
 import * as fs from "fs/promises";
 
 const WEB_APP = "io.github.tanviirdev.herdr-preview.web";
+const WEB_PROCESS = "HerdrPreviewWeb"; // its executable's name, matched exactly (pgrep -x)
 const MAX_BYTES = 2_000_000;
 const MARKDOWN = new Set(["md", "markdown", "mdx", "mdown", "mkd"]);
 const HTML = new Set(["html", "htm", "xhtml"]);
@@ -46,6 +47,17 @@ const findNode = (node, id) => {
 };
 // The web view can only be placed when the layout has every node the geometry is measured from.
 const webLayout = () => { const root = layout(); return NODES.every((id) => findNode(root, id)); };
+
+// Starts the web view app unless it's already running, and says whether it is now. Never
+// `open` a running copy: macOS can make it the frontmost app, and the web view hides whenever
+// the Herdr app isn't frontmost. -x matches the process name only; -f would also match any
+// command line that mentions it.
+async function ensureWeb() {
+  const running = await exec("pgrep", ["-x", WEB_PROCESS]).catch(() => ({ code: 1 }));
+  if (running.code === 0) return true;
+  const r = await exec("open", ["-g", "-b", WEB_APP]).catch(() => ({ code: 1 }));
+  return r.code === 0;
+}
 
 // Resolves a relative link against the previewed file's folder.
 function resolve(from, rel) {
@@ -97,8 +109,7 @@ export default class Preview extends View {
     this.lastRetry = Date.now();
     const file = this.file;
     cx.spawn(async (cx) => {
-      const r = await exec("open", ["-g", "-b", WEB_APP]).catch(() => ({ code: 1 }));
-      if (r.code !== 0 || this.file !== file) return;
+      if (!(await ensureWeb()) || this.file !== file) return;
       this.webMissing = false;
       this.open(file, cx);
       cx.notify();
@@ -160,7 +171,7 @@ export default class Preview extends View {
     // Keep the web view app running while it should show (it may have been updated or quit).
     if (geometry.visible && now - (this.lastStart ?? 0) > 5000) {
       this.lastStart = now;
-      exec("open", ["-g", "-b", WEB_APP]).catch(() => {});
+      ensureWeb();
     }
     if (text === this.lastGeometry && now - (this.lastWrite ?? 0) < 1000) return;
     this.lastGeometry = text;
@@ -207,13 +218,12 @@ export default class Preview extends View {
     this.watch(cx);
   }
 
-  // Starts the web view app without bringing it forward (-g), so Herdr stays the frontmost app.
-  // If it isn't installed, fall back to the native renderer.
+  // Starts the web view app if it isn't running. If it isn't installed, fall back to the
+  // native renderer.
   startWeb(cx) {
     const file = this.file;
     cx.spawn(async (cx) => {
-      const r = await exec("open", ["-g", "-b", WEB_APP]).catch(() => ({ code: 1 }));
-      if (r.code === 0 || this.file !== file) return;
+      if ((await ensureWeb()) || this.file !== file) return;
       this.webMissing = true;
       this.open(file, cx);
       this.sync();

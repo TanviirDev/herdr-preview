@@ -221,7 +221,10 @@ final class Controller: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         readInputs()
         let fresh = geometryStamp.map { Date().timeIntervalSince($0) < 3 } ?? false
-        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier == herdrPID
+        // This app being frontmost counts as Herdr in use: it only ever comes forward from Herdr
+        // (a click in its panel, or a stray `open`), so hiding then would yank the page away.
+        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let front = frontPID == herdrPID || frontPID == ProcessInfo.processInfo.processIdentifier
         guard let g = geometry, g.visible, fresh, front, loaded != nil,
               g.width > 20, g.height > 20, let win = herdrWindow() else {
             hide()
