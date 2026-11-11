@@ -3,6 +3,7 @@
 #   herdr-preview <file>              show it in the Preview panel (layout "preview")
 #   herdr-preview <file> right|down   open it as a split pane beside the focused pane instead
 #   herdr-preview <url>               show a web page (http, https, file) in the Preview panel
+#   herdr-preview --snapshot <out.png>  save what the panel's web view shows now as a PNG
 # In the panel, Markdown uses Herdr's native renderer; .html files and URLs use a real WebKit
 # view (the Herdr Preview Web app). Without a Preview panel in the shown layout, it falls back
 # to a split pane on the right.
@@ -12,7 +13,28 @@ set -eu
 
 if [ $# -lt 1 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "usage: herdr-preview <file.md|file.html|url> [right|down]" >&2
+  echo "       herdr-preview --snapshot <out.png>" >&2
   exit 2
+fi
+
+# Asks the web view app to save what it shows, then waits up to 10 s for the file.
+if [ "$1" = "--snapshot" ]; then
+  [ $# -ge 2 ] || { echo "usage: herdr-preview --snapshot <out.png>" >&2; exit 2; }
+  out=$(cd "$(dirname -- "$2")" && pwd -P)/$(basename -- "$2")
+  rm -f "$out" "$out.error"
+  request="$HOME/.config/herdr-app/herdr-preview/snapshot"
+  mkdir -p "$(dirname "$request")"
+  printf '%s\n' "$out" > "$request"
+  i=0
+  while [ $i -lt 100 ]; do
+    if [ -f "$out" ]; then echo "$out"; exit 0; fi
+    if [ -f "$out.error" ]; then echo "herdr-preview: $(cat "$out.error")" >&2; rm -f "$out.error"; exit 1; fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  rm -f "$request"
+  echo "herdr-preview: no snapshot; is a web page showing in the Preview panel?" >&2
+  exit 1
 fi
 
 case "${2:-panel}" in

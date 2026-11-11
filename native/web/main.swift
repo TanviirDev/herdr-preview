@@ -14,6 +14,8 @@
 //                                                ({visible, right, top, width, height, zoom}; a
 //                                                heartbeat: older than 3 s means hide)
 //   ~/.config/herdr-app/herdr-preview/reload     any write reloads the page
+//   ~/.config/herdr-app/herdr-preview/snapshot   a PNG path: save what the view shows there,
+//                                                then delete this file (herdr-preview --snapshot)
 // Output: ~/.config/herdr-app/herdr-preview/helper.json (the last frame, for debugging).
 // It quits when the Herdr app does.
 
@@ -26,6 +28,7 @@ let stateDir = home + "/.config/herdr-app/herdr-preview"
 let panelPath = stateDir + "/panel.json"
 let reloadPath = stateDir + "/reload"
 let debugPath = stateDir + "/helper.json"
+let snapshotPath = stateDir + "/snapshot"
 let currentPath = home + "/.local/state/herdr-preview/target"
 
 struct Geometry: Decodable {
@@ -128,6 +131,28 @@ final class Controller: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let stamp = modified(reloadPath), stamp != reloadStamp {
             if reloadStamp != nil, loaded != nil { web.reload() }
             reloadStamp = stamp
+        }
+        if FileManager.default.fileExists(atPath: snapshotPath) { snapshot() }
+    }
+
+    /// Saves what the view shows to the PNG path named in the snapshot request file.
+    /// Only a shown view is painted in full, so a hidden one answers with an error file.
+    func snapshot() {
+        let out = ((try? String(contentsOfFile: snapshotPath, encoding: .utf8)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try? FileManager.default.removeItem(atPath: snapshotPath)
+        guard !out.isEmpty else { return }
+        guard shown else {
+            try? "the web view isn't showing".write(toFile: out + ".error", atomically: true, encoding: .utf8)
+            return
+        }
+        web.takeSnapshot(with: nil) { image, error in
+            guard let tiff = image?.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else {
+                try? (error?.localizedDescription ?? "no image").write(toFile: out + ".error", atomically: true, encoding: .utf8)
+                return
+            }
+            try? png.write(to: URL(fileURLWithPath: out), options: .atomic)
         }
     }
 
