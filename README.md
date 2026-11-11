@@ -77,8 +77,10 @@ The Herdr app can't host a web view, so the HTML view is a separate, borderless 
 (Herdr Preview Web) that floats exactly over the panel. The panel's mod writes where the panel
 is to `~/.config/herdr-app/herdr-preview/panel.json` on every change and at least once a second.
 The helper combines that with the Herdr window's position, follows it as you move or resize,
-and hides whenever the panel is closed, Herdr isn't the frontmost app, or that file goes stale.
-The window never activates its app, so Herdr stays frontmost while you click and type in a page.
+and hides whenever the panel is closed or that file goes stale. While Herdr is frontmost the
+window floats above everything; while another app is, it sits just above Herdr's window, so
+other apps cover it as they cover Herdr. The window never activates its app, so Herdr stays
+frontmost while you click and type in a page.
 
 Cmd-click routing works by making Herdr Preview Links the Mac's default app for `.md` files. A
 file opened while Herdr is frontmost goes to the panel; one opened anywhere else goes to the app

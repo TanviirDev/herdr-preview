@@ -89,6 +89,7 @@ and web pages in a real WebKit view.
    within about a second.
 4. With the helper installed, `herdr-preview http://example.com` shows the styled page exactly
    over the panel body; it follows the window when moved or resized, follows the panel's edge,
-   moves when Files opens, and disappears when another app is frontmost or Preview is clicked.
+   moves when Files opens, and disappears when Preview is clicked. With another app frontmost
+   it stays visible over Herdr, and that app's windows cover it.
 5. Without the helper, an `.html` file shows as plain text with "no CSS (web view not
    installed)" in the header.

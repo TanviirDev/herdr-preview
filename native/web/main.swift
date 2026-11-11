@@ -3,8 +3,10 @@
 //
 // Herdr can't host a web view, so this app floats a borderless window exactly over the
 // Preview panel's body and follows Herdr: it moves and resizes with the window and the panel,
-// and hides whenever the panel is hidden, not in web mode, or Herdr isn't the frontmost app.
-// The window is a non-activating panel, so clicking and typing in it keep Herdr frontmost.
+// and hides whenever the panel is hidden or not in web mode. While Herdr is frontmost it floats
+// above everything; while another app is, it sits just above Herdr's window, so other apps
+// cover it as they cover Herdr. The window is a non-activating panel, so clicking and typing in
+// it keep Herdr frontmost.
 //
 // Inputs (all files):
 //   ~/.local/state/herdr-preview/target          line 1, what to show: a URL or an .html path
@@ -225,7 +227,7 @@ final class Controller: NSObject, WKNavigationDelegate, WKUIDelegate {
         // (a click in its panel, or a stray `open`), so hiding then would yank the page away.
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let front = frontPID == herdrPID || frontPID == ProcessInfo.processInfo.processIdentifier
-        guard let g = geometry, g.visible, fresh, front, loaded != nil,
+        guard let g = geometry, g.visible, fresh, loaded != nil,
               g.width > 20, g.height > 20, let win = herdrWindow() else {
             hide()
             return
@@ -242,7 +244,24 @@ final class Controller: NSObject, WKNavigationDelegate, WKUIDelegate {
             let debug = "{\"window\":[\(win.minX),\(win.minY),\(win.width),\(win.height)],\"frame_cg\":[\(x),\(top),\(width),\(height)]}"
             try? debug.write(toFile: debugPath, atomically: true, encoding: .utf8)
         }
-        if !shown { panel.orderFrontRegardless(); shown = true }
+        place(front: front)
+    }
+
+    /// While Herdr (or this app) is frontmost, the page floats above everything, so clicks in
+    /// Herdr's own window can't bury it. While another app is frontmost, it drops to the normal
+    /// level and sits directly above Herdr's window: visible wherever Herdr is, and covered by
+    /// other apps' windows like the rest of Herdr. Re-asserted once a second.
+    func place(front: Bool) {
+        if front {
+            if !shown || panel.level != .floating {
+                panel.level = .floating
+                panel.orderFrontRegardless()
+            }
+        } else if let id = windowID, !shown || panel.level != .normal || ticks % 60 == 0 {
+            panel.level = .normal
+            panel.order(.above, relativeTo: Int(id))
+        }
+        shown = true
     }
 
     // MARK: - WebKit
